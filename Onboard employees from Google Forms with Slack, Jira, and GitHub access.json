@@ -1,0 +1,411 @@
+{
+  "name": "Onboard employees from Google Forms with Slack, Jira, and GitHub access",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "### Data processing and validation\nProcesses form input and checks if onboarding was already completed.",
+        "height": 544,
+        "width": 992
+      },
+      "id": "b7b6418c-4f5b-4782-a3ca-a152bd392b67",
+      "name": "Group: Sorting Office",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        816,
+        176
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "content": "### User provisioning and onboarding\nCreates accounts, assigns access, and sets up onboarding tasks.",
+        "height": 544,
+        "width": 1312
+      },
+      "id": "62bb3473-aebb-4faf-892b-2ca0d41f17ee",
+      "name": "Group: Digital Onboarding",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1856,
+        176
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "documentId": "YOUR_GOOGLE_SHEET_ID_HERE",
+        "sheetName": "Form Responses 1",
+        "event": "rowAdded",
+        "options": {}
+      },
+      "id": "69266519-e853-4a11-8e56-b6fbc913d9c3",
+      "name": "New Google Form Response",
+      "type": "n8n-nodes-base.googleSheetsTrigger",
+      "position": [
+        864,
+        480
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "jsCode": "const config = {\n  departments: {\n    \"Software\": { slack: \"YOUR_SOFTWARE_SLACK_CHANNEL_ID\", jira: \"YOUR_SOFTWARE_JIRA_PROJECT_KEY\" },\n    \"Marketing\": { slack: \"YOUR_MARKETING_SLACK_CHANNEL_ID\", jira: \"YOUR_MKT_JIRA_PROJECT_KEY\" },\n    \"Finance\": { slack: \"YOUR_FINANCE_SLACK_CHANNEL_ID\", jira: \"YOUR_FIN_JIRA_PROJECT_KEY\" },\n    \"Project\": { slack: \"YOUR_PROJECT_SLACK_CHANNEL_ID\", jira: \"YOUR_PROJ_JIRA_PROJECT_KEY\" }\n  },\n  componentMap: {\n    \"FrontEnd\": \"YOUR_FRONTEND_COMPONENT_ID\",\n    \"BackEnd\": \"YOUR_BACKEND_COMPONENT_ID\",\n    \"Mobile\": \"YOUR_MOBILE_COMPONENT_ID\",\n    \"UI/UX\": \"YOUR_UIUX_COMPONENT_ID\",\n    \"Tester\": \"YOUR_TESTER_COMPONENT_ID\",\n    \"Project Manager\": \"YOUR_PM_COMPONENT_ID\",\n    \"Business Analyst\": \"YOUR_BA_COMPONENT_ID\",\n    \"Scrum Master\": \"YOUR_SM_COMPONENT_ID\"\n  },\n  teams: {\n    \"FrontEnd\": \"your-frontend-repo-name\",\n    \"BackEnd\": \"your-backend-repo-name\",\n    \"Mobile\": \"your-mobile-repo-name\",\n    \"UI/UX\": \"your-design-repo-name\",\n    \"Tester\": \"your-qa-repo-name\"\n  }\n};\n\nconst item = $input.item.json;\n\nconst deptConfig = config.departments[item.Department] || { slack: \"YOUR_GENERAL_SLACK_CHANNEL_ID\", jira: \"YOUR_DEFAULT_JIRA_PROJECT_KEY\" };\nconst selectedComponentId = config.componentMap[item.Team];\n\nreturn {\n  ...item,\n  targetSlack: deptConfig.slack,\n  targetJira: deptConfig.jira,\n  targetComponentIds: selectedComponentId ? [selectedComponentId] : [],\n  targetRepo: config.teams[item.Team] || \"your-general-repo-name\",\n  targetGithubUser: item[\"GitHub Username\"],\n  isSoftware: item.Department === \"Software\"\n};"
+      },
+      "id": "68cbd270-6eae-4d98-bffc-520c5adde40c",
+      "name": "Map department and team configuration",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        1120,
+        480
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "633b8d07-5da8-44ea-b949-614ebf7bff8b",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              },
+              "leftValue": "={{ $json.Status }}",
+              "rightValue": "Completed"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "065ed661-a4ad-4fe5-b89c-87ed209652ec",
+      "name": "Check if onboarding already completed",
+      "type": "n8n-nodes-base.if",
+      "position": [
+        1376,
+        480
+      ],
+      "typeVersion": 2.2
+    },
+    {
+      "parameters": {
+        "select": "user",
+        "user": "YOUR_SLACK_ADMIN_USER_ID_HERE",
+        "text": "=Admin notice: User {{ $('Map department and team configuration').item.json['Full Name'] }} ({{ $('Map department and team configuration').item.json.Email }}) was already processed (Status = Completed)",
+        "otherOptions": {}
+      },
+      "id": "de7b69ef-17dc-4823-a9a9-fac98aa79121",
+      "name": "Notify admin if already processed",
+      "type": "n8n-nodes-base.slack",
+      "position": [
+        1616,
+        256
+      ],
+      "webhookId": "4c6515a4-468e-424a-9470-e307d4799f45",
+      "typeVersion": 2.3
+    },
+    {
+      "parameters": {
+        "resource": "channel",
+        "operation": "join",
+        "channelId": "={{ $json.targetSlack }}"
+      },
+      "id": "92ad2cd0-5cec-413b-bea9-df7633618eb5",
+      "name": "Add user to department Slack channel",
+      "type": "n8n-nodes-base.slack",
+      "position": [
+        1952,
+        496
+      ],
+      "webhookId": "a4b61421-c19a-4acf-a5c2-9d5385696935",
+      "typeVersion": 2.3,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "a3432154-31aa-411c-9fd5-ecbe8b80b453",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "leftValue": "={{ $('Map department and team configuration').item.json.isSoftware }}",
+              "rightValue": "true"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "c02628e3-095c-4ad7-926e-8340f2721f37",
+      "name": "Check if department is software",
+      "type": "n8n-nodes-base.if",
+      "position": [
+        2224,
+        496
+      ],
+      "typeVersion": 2.2
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "=https://api.github.com/repos/YOUR_ORG_NAME/{{ $('Map department and team configuration').item.json.targetRepo }}/collaborators/{{ $('Map department and team configuration').item.json['GitHub Username'] }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "githubApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github.v3+json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "permission",
+              "value": "push"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a1025c97-2f40-4eba-bbfc-854749bca062",
+      "name": "Add user to GitHub repository",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        2464,
+        320
+      ],
+      "typeVersion": 4.3
+    },
+    {
+      "parameters": {
+        "project": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $('Map department and team configuration').item.json.targetJira }}"
+        },
+        "issueType": {
+          "__rl": true,
+          "mode": "list",
+          "value": "10014",
+          "cachedResultName": "Task"
+        },
+        "summary": "=Onboarding: {{ $('Map department and team configuration').item.json.Email }}",
+        "additionalFields": {
+          "description": "=Please complete onboarding for new hire in department: {{ $('Map department and team configuration').item.json.Department }}",
+          "componentIds": "={{ [$('Map department and team configuration').item.json.targetComponentIds[0]] }}"
+        }
+      },
+      "id": "442b4db3-d45e-4173-82aa-29e9a4891720",
+      "name": "Create onboarding task in Jira",
+      "type": "n8n-nodes-base.jira",
+      "position": [
+        3008,
+        512
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://YOUR_SITE.atlassian.net",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "jiraSoftwareCloudApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"emailAddress\": \"{{ $('Map department and team configuration').item.json.Email }}\",\n  \"products\": [\"jira-software\"]\n}",
+        "options": {}
+      },
+      "id": "eeb98ba4-5453-45ea-8768-96f8dbf6c45c",
+      "name": "Invite user to Jira",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        2720,
+        512
+      ],
+      "typeVersion": 4.3
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": "YOUR_GOOGLE_SHEET_ID_HERE",
+        "sheetName": "Form Responses 1",
+        "columns": {
+          "value": {
+            "Email": "={{ $('Map department and team configuration').item.json.Email }}",
+            "Status": "Completed"
+          },
+          "schema": [
+            {
+              "id": "Email",
+              "type": "string",
+              "displayName": "Email",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Status",
+              "type": "string",
+              "displayName": "Status",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "mappingMode": "defineBelow",
+          "matchingColumns": [
+            "Email"
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "b5beb011-b6c5-4ce6-9852-341688ec816a",
+      "name": "Update Google Sheet status to completed",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [
+        3312,
+        512
+      ],
+      "typeVersion": 4.7
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Invite user to Jira": {
+      "main": [
+        [
+          {
+            "node": "Create onboarding task in Jira",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "New Google Form Response": {
+      "main": [
+        [
+          {
+            "node": "Map department and team configuration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add user to GitHub repository": {
+      "main": [
+        [
+          {
+            "node": "Invite user to Jira",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create onboarding task in Jira": {
+      "main": [
+        [
+          {
+            "node": "Update Google Sheet status to completed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check if department is software": {
+      "main": [
+        [
+          {
+            "node": "Add user to GitHub repository",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Invite user to Jira",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add user to department Slack channel": {
+      "main": [
+        [
+          {
+            "node": "Check if department is software",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check if onboarding already completed": {
+      "main": [
+        [
+          {
+            "node": "Notify admin if already processed",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Add user to department Slack channel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Map department and team configuration": {
+      "main": [
+        [
+          {
+            "node": "Check if onboarding already completed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "98cc96f2-5bdb-4d3e-b435-5adc0c7435e8",
+  "meta": {
+    "instanceId": "79ca1c2e1ba2143b110a64a072fbd181ef45f6d3abaeb591beacf5e31b26e46a"
+  },
+  "id": "CUON4Cwr6Tzl5604",
+  "tags": []
+}
